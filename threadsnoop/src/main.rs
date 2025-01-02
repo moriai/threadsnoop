@@ -1,12 +1,27 @@
-use aya::programs::UProbe;
+use aya::{
+    maps::perf::AsyncPerfEventArray,
+    programs::UProbe,
+    util::online_cpus,
+};
+use bytes::BytesMut;
 use clap::Parser;
 #[rustfmt::skip]
 use log::{debug, warn};
-use tokio::signal;
+use threadsnoop_common::ThreadInfo;
+use tokio::{task,signal};
+const SEC_NSEC: u64 = 1_000_000_000;
+
+fn gettime() -> u64 {
+    let mut time = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+    let ret = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC_COARSE, &mut time) };
+    assert!(ret == 0);
+    (time.tv_sec as u64) * SEC_NSEC + time.tv_nsec as u64
+}
 
 #[derive(Debug, Parser)]
+#[command(author, version)]
 struct Opt {
-    #[clap(short, long)]
+    #[clap(short, long, help = "Attach to the process with <PID>")]
     pid: Option<i32>,
 }
 
@@ -44,8 +59,36 @@ async fn main() -> anyhow::Result<()> {
     program.load()?;
     program.attach(Some("pthread_create"), 0, "libc", pid)?;
 
+    let start = gettime();
     let ctrl_c = signal::ctrl_c();
     println!("Waiting for Ctrl-C...");
+
+    let mut perf_array = AsyncPerfEventArray::try_from(ebpf.take_map("EVENTS").unwrap())?;
+
+    for cpu_id in online_cpus().map_err(|(_, error)| error)? {
+        let mut buf = perf_array.open(cpu_id, None)?;
+
+        task::spawn(async move {
+            let mut buffers = (0..10)
+                .map(|_| BytesMut::with_capacity(1024))
+                .collect::<Vec<_>>();
+
+            loop {
+                let events = buf.read_events(&mut buffers).await.unwrap();
+                for i in 0..events.read {
+                    let buf = &mut buffers[i];
+                    let ptr = buf.as_ptr() as *const ThreadInfo;
+                    let data = unsafe { ptr.read_unaligned() };
+                    let comm = data.comm.iter().filter(|&s| *s != 0u8).map(|&s| s as char).collect::<String>();
+                    let dt = data.ts - start;
+                    let sec = dt / SEC_NSEC;
+                    let nsec = dt - sec * SEC_NSEC;
+                    println!("{:3}.{:09} {:7} {:7} {:16} 0x{:x}", sec, nsec, data.pid, data.tid, comm, data.entry);
+                }
+            }
+        });
+    }
+
     ctrl_c.await?;
     println!("Exiting...");
 

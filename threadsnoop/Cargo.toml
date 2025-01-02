@@ -14,6 +14,7 @@ libc = { workspace = true }
 log = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "net", "signal"] }
 
+bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "help", "usage", "color"] }
 [build-dependencies]
 anyhow = { workspace = true }
