@@ -58,19 +58,19 @@ async fn main() -> anyhow::Result<()> {
 
     let program_0: &mut UProbe = ebpf.program_mut("probe_pthread_create").unwrap().try_into()?;
     program_0.load()?;
-    program_0.attach(Some("pthread_create"), 0, "/lib/x86_64-linux-gnu/libc.so.6", pid)?;
+    program_0.attach(Some("pthread_create"), 0, "libc", pid)?;
 
     let program_1: &mut UProbe = ebpf.program_mut("probe_pthread_detach").unwrap().try_into()?;
     program_1.load()?;
-    program_1.attach(Some("pthread_detach"), 0, "/lib/x86_64-linux-gnu/libc.so.6", pid)?;
+    program_1.attach(Some("pthread_detach"), 0, "libc", pid)?;
 
     let program_2: &mut UProbe = ebpf.program_mut("probe_pthread_exit").unwrap().try_into()?;
     program_2.load()?;
-    program_2.attach(Some("pthread_exit"), 0, "/lib/x86_64-linux-gnu/libc.so.6", pid)?;
+    program_2.attach(Some("pthread_exit"), 0, "libc", pid)?;
 
     let program_3: &mut UProbe = ebpf.program_mut("probe_pthread_join").unwrap().try_into()?;
     program_3.load()?;
-    program_3.attach(Some("pthread_join"), 0, "/lib/x86_64-linux-gnu/libc.so.6", pid)?;
+    program_3.attach(Some("pthread_join"), 0, "libc", pid)?;
 
     let start = gettime();
     let ctrl_c = signal::ctrl_c();
