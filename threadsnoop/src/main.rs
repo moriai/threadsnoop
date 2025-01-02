@@ -55,9 +55,22 @@ async fn main() -> anyhow::Result<()> {
         warn!("failed to initialize eBPF logger: {}", e);
     }
     let Opt { pid } = opt;
-    let program: &mut UProbe = ebpf.program_mut("threadsnoop").unwrap().try_into()?;
-    program.load()?;
-    program.attach(Some("pthread_create"), 0, "libc", pid)?;
+
+    let program_0: &mut UProbe = ebpf.program_mut("probe_pthread_create").unwrap().try_into()?;
+    program_0.load()?;
+    program_0.attach(Some("pthread_create"), 0, "/lib/x86_64-linux-gnu/libc.so.6", pid)?;
+
+    let program_1: &mut UProbe = ebpf.program_mut("probe_pthread_detach").unwrap().try_into()?;
+    program_1.load()?;
+    program_1.attach(Some("pthread_detach"), 0, "/lib/x86_64-linux-gnu/libc.so.6", pid)?;
+
+    let program_2: &mut UProbe = ebpf.program_mut("probe_pthread_exit").unwrap().try_into()?;
+    program_2.load()?;
+    program_2.attach(Some("pthread_exit"), 0, "/lib/x86_64-linux-gnu/libc.so.6", pid)?;
+
+    let program_3: &mut UProbe = ebpf.program_mut("probe_pthread_join").unwrap().try_into()?;
+    program_3.load()?;
+    program_3.attach(Some("pthread_join"), 0, "/lib/x86_64-linux-gnu/libc.so.6", pid)?;
 
     let start = gettime();
     let ctrl_c = signal::ctrl_c();
@@ -83,7 +96,8 @@ async fn main() -> anyhow::Result<()> {
                     let dt = data.ts - start;
                     let sec = dt / SEC_NSEC;
                     let nsec = dt - sec * SEC_NSEC;
-                    println!("{:3}.{:09} {:7} {:7} {:16} 0x{:x}", sec, nsec, data.pid, data.tid, comm, data.entry);
+                    println!("{:3}.{:09} {:7} {:7} {:16} {:6} 0x{:x}",
+                        sec, nsec, data.pid, data.tid, comm, data.func.name(), data.target);
                 }
             }
         });
